@@ -1,5 +1,6 @@
 import argparse
 import numpy as np
+import pickle
 
 from util import write_w2v, writeAnalogies, writeGroupAnalogies, convert_legacy_to_keyvec, load_legacy_w2v, pruneWordVecs
 from biasOps import identify_bias_subspace, neutralize_and_equalize, equalize_and_soften, normalize
@@ -11,6 +12,7 @@ from visualize import *
 
 parser = argparse.ArgumentParser()
 parser.add_argument('-embeddingPath', default='data/w2vs/reddit.US.txt.tok.clean.cleanedforw2v_0.w2v')
+parser.add_argument('-embedDim', type=int, default=512)
 parser.add_argument('vocabPath', choices=['inter', 'gender', 'race', 'religion', 'grr', 'gr'])
 parser.add_argument('subs', choices=['default', 'josec', 'sum', 'mean', 'concat'])
 parser.add_argument('eval', choices=['inter', 'gender', 'race', 'religion', 'total'])
@@ -28,7 +30,7 @@ outprefix = args.vocabPath + "_" + args.subs
 embprefix = args.embeddingPath.replace("/", "_").replace("\\", "_").replace(".", "_").replace("attributes_", "").replace("data_", "").replace("json_", "").replace("w2vs_", "").replace("_w2v", "").replace("output_", "")
 
 print("Loading embeddings from {}".format(args.embeddingPath))
-word_vectors, embedding_dim = load_legacy_w2v(args.embeddingPath)
+word_vectors, embedding_dim = load_legacy_w2v(args.embeddingPath,args.embedDim)
 
 # Debiasing Subspace
 if(args.vocabPath=='inter'):
@@ -88,7 +90,12 @@ testTerms = load_test_terms(path)
 
 neutral_words = []
 for value in analogyTemplates.values():
-    neutral_words.extend(value)
+    temp = []
+    for val in value:
+        if val in word_vectors.keys():
+            temp.append(val)
+    print(temp)
+    neutral_words.extend(temp)
 
 
 print("Pruning Word Vectors... Starting with", len(word_vectors))
@@ -113,7 +120,7 @@ elif(args.subs =='josec'):
     senNum, rank, dim = contextVecs.shape  # (3, 2, 50)
     kmeansIterMax = 1000
 
-    final_subspace = polysemy(contextVecs, K, 50, kmeansIterMax, senNum)  # (1, 50)
+    final_subspace = polysemy(contextVecs, K, args.embedDim, kmeansIterMax, senNum)  # (1, 50)
     print("Applying Polysemy")
     # np.savetxt("data/gen_vector.csv", subspace_gen, delimiter=",")
     # np.savetxt("data/rac_vector.csv", subspace_rac, delimiter=",")
@@ -143,8 +150,11 @@ if(args.hard):
                         defSets.values(), final_subspace, embedding_dim)
 if(args.soft):
     print("Equalizing and Softening")
-    new_soft_word_vectors = equalize_and_soften(word_vectors, neutral_words,
+    new_soft_word_vectors, transform = equalize_and_soften(word_vectors, neutral_words,
                         defSets.values(), final_subspace, embedding_dim, verbose=args.v)
+    with open("soft_debias.pkl","wb") as fout:
+        pickle.dump(transform,fout)
+    
 
 if(args.analogies):
     print("Generating Analogies")
