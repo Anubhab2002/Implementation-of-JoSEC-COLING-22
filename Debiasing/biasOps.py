@@ -129,7 +129,13 @@ def equalize_and_soften(vocab, words, eq_sets, bias_subspace, embedding_dim, l=0
     vocabIndex, vocabVectors = zip(*vocab.items())
     vocabIndex = {i:label for i, label in enumerate(vocabIndex)}
 
-    Neutrals = torch.tensor([vocab[w] for w in words]).float().t()
+    # Neutrals = torch.tensor([vocab[w] for w in words]).float().t()
+
+    # Convert list of words to a single NumPy array
+    word_indices = np.array([vocab[w] for w in words], dtype=np.int64)
+
+    # Convert the NumPy array to a PyTorch tensor
+    Neutrals = torch.tensor(word_indices).float().t()
 
     Words = torch.tensor(vocabVectors).float().t()
 
@@ -150,8 +156,8 @@ def equalize_and_soften(vocab, words, eq_sets, bias_subspace, embedding_dim, l=0
     BiasSpace.requires_grad = False
     Transform.requires_grad = True
 
-    epochs = 10
-    optimizer = torch.optim.SGD([Transform], lr=0.000001, momentum=0.0)
+    epochs = 100
+    optimizer = torch.optim.Adam([Transform], lr=1e-1)
 
     for i in range(0, epochs):
         TtT = torch.mm(Transform.t(), Transform)
@@ -178,9 +184,9 @@ def equalize_and_soften(vocab, words, eq_sets, bias_subspace, embedding_dim, l=0
         transformedVec = torch.mm(Transform, w.view(-1, 1))
         debiasedVectors[vocabIndex[i]] = ( transformedVec / transformedVec.norm(p=2) ).detach().numpy().flatten()
 
-    return debiasedVectors
+    return debiasedVectors, Transform
 
-def equalize_and_soften_old(vocab, words, eq_sets, bias_subspace, embedding_dim, l=0.2, verbose=True):
+def equalize_and_soften_(vocab, words, eq_sets, bias_subspace, embedding_dim, l=0.2, verbose=True):
     vocabIndex, vocabVectors = zip(*vocab.items())
     vocabIndex = {i:label for i, label in enumerate(vocabIndex)}
 
@@ -233,8 +239,3 @@ def equalize_and_soften_old(vocab, words, eq_sets, bias_subspace, embedding_dim,
         debiasedVectors[vocabIndex[i]] = ( transformedVec / transformedVec.norm(p=2) ).detach().numpy().flatten()
 
     return debiasedVectors
-
-
-
-
-
